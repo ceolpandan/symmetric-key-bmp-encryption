@@ -17,10 +17,10 @@ union xor{
     unsigned int y;
     unsigned char c[3];
 };
-
+//unions used for the encrypting algorithm
 
 unsigned int xorshift32(unsigned int seed){
-
+	//function that returns random unsigned int
     unsigned int r=seed;
 
         r = r^r<<13;
@@ -30,152 +30,150 @@ unsigned int xorshift32(unsigned int seed){
     return r;
 }
 
-unsigned int *permutare(int w,int h,unsigned int *random){
+unsigned int *permute(int width, int height, unsigned int *random){
 
-    unsigned int *perm = (unsigned int*) malloc( (w*h)*sizeof(unsigned int) );
+    unsigned int *pixels = (unsigned int*)malloc((width*height)*sizeof(unsigned int));
+    int i, aux, j;
 
-    int k,aux;
+    for(i=0; i < width*height; i++)
+        pixels[i] = i;
 
-    for(k=0; k<w*h; k++)
-        perm[k]=k;
-
-    int j;
-
-    for(k=w*h-1; k>=1; k--){
-
-        j=random[w*h-k]%(k+1);
-        aux=perm[k];
-        perm[k]=perm[j];
-        perm[j]=aux;
+    for(i=width*height-1; i>=1; i--){
+        j = random[width*height-i]%(i+1);
+        aux = pixels[i];
+        pixels[i] = pixels[j];
+        pixels[j] = aux;
     }
-    return perm;
+
+    return pixels;
 }
-pixel* liniarizare(char* nume_imagine){
 
-    FILE *f=fopen(nume_imagine,"rb");
-    if(f==NULL)
-    {
+pixel* linearization (char* bmp_filename){
+
+    FILE *fs = fopen(bmp_filename,"rb");
+
+    if(fs == NULL)
         printf("eroare(linializare)");
-    }
-    rewind(f);
 
-    unsigned int latime,inaltime;
-    fseek(f,18,SEEK_SET);
-    fread(&latime,sizeof(unsigned int),1,f);
-    fread(&inaltime,sizeof(unsigned int),1,f);
+    rewind(fs);
 
-    int padd;
-    if(latime%4 != 0)
-        padd=4-(3*latime)%4;
+    unsigned int width, height;
+    fseek(fs, 18, SEEK_SET);
+    fread(&width, sizeof(unsigned int), 1, fs);
+    fread(&height,sizeof(unsigned int), 1, fs);
+
+    int padding, i, j;
+
+    if(width%4 != 0)
+        padding=4-(3*width)%4;
     else
-        padd=0;
+        padding=0;
 
-    fseek(f,54,SEEK_SET);
-    pixel* pxArray=(pixel*)malloc(inaltime*latime*sizeof(pixel));
-    int i,j;
-    for(i=inaltime-1; i>=0; i--){
-        for(j=0; j<latime; j++){
-            fread(&pxArray[i*latime+j].B,1,1,f);
-            fread(&pxArray[i*latime+j].G,1,1,f);
-            fread(&pxArray[i*latime+j].R,1,1,f);
+    fseek(fs, 54, SEEK_SET);
+    pixel* pxArray = (pixel*)malloc(height*width*sizeof(pixel));
+    
+    for(i=height-1; i>=0; i--){
+        for(j=0; j<width; j++){
+            fread(&pxArray[i*width+j].B,1,1,fs);
+            fread(&pxArray[i*width+j].G,1,1,fs);
+            fread(&pxArray[i*width+j].R,1,1,fs);
         }
-        fseek(f,padd,SEEK_CUR);
+        fseek(fs,padding,SEEK_CUR);
     }
     return pxArray;
 }
 
-void export_lin(char* nume_imagine_h,char* nume_img_out,pixel*v){
+void export_linear(char* bmp_filename,char* bmp_out, pixel* linear){
 
     FILE *f,*g;
-    f=fopen(nume_imagine_h,"rb");
-    g=fopen(nume_img_out,"wb+");
+    f=fopen(bmp_filename, "rb");
+    g=fopen(bmp_out, "wb+");
 
     if(f==NULL || g==NULL){
-        printf("eroare(export_lin)");
+        printf("error(export_linear)");
+        exit(0);
     }
 
-    unsigned int latime,inaltime;
+    unsigned int width, height;
     fseek(f,18,SEEK_SET);
-    fread(&latime,sizeof(unsigned int),1,f);
-    fread(&inaltime,sizeof(unsigned int),1,f);
+    fread(&width,sizeof(unsigned int),1,f);
+    fread(&height,sizeof(unsigned int),1,f);
 
-    int padd;
-    if(latime%4 != 0)
-        padd=4-(3*latime)%4;
+    int padding, i, j;
+    if(width%4 != 0)
+        padding = 4-(3*width)%4;
     else
-        padd=0;
+        padding = 0;
 
     unsigned char z;
     fseek(f,0,SEEK_SET);
 
-    for(int x=0;x<54;x++){
-        fread(&z,1,1,f);
-        fwrite(&z,1,1,g);
+    for(int i=0; i<54; i++){
+        fread(&z, 1, 1, f);
+        fwrite(&z, 1, 1, g);
     }
-    int i,j;
     unsigned char k=0;
-    for(i=inaltime-1; i>=0;i--){
 
-        for(j=0;j<latime;j++){
-
-            fwrite(&v[i*latime+j].B,1,1,g);
-            fwrite(&v[i*latime+j].G,1,1,g);
-            fwrite(&v[i*latime+j].R,1,1,g);
+    for(i=height-1; i>=0;i--){
+        for(j=0; j<width; j++){
+            fwrite(&linear[i*width+j].B, 1, 1, g);
+            fwrite(&linear[i*width+j].G, 1, 1, g);
+            fwrite(&linear[i*width+j].R, 1, 1, g);
         }
-        fwrite(&k,sizeof(unsigned char),padd,g);
+        fwrite(&k, sizeof(unsigned char), padding, g);
     }
 
-    }
-void cripteaza(char* nume_fin,char *nume_cheie,char*nume_fout){
+}
+
+void encrypt(char* bmp_in,char *txt_key, char* bmp_out){
 
     FILE *fin,*key;
 
-        fin=fopen(nume_fin,"rb");
-        key=fopen(nume_cheie,"r");
+        fin = fopen(bmp_in, "rb");
+        key=fopen(txt_key, "r");
 
         if(fin==NULL || key==NULL){
-            printf("eroare(cripteaza)");
+            printf("error(encrypt)");
             exit(0);
         }
 
-    unsigned int inaltime,latime,cheie,SV;
+    unsigned int width, height, KEY, SV;
 
-        fseek(fin,18,SEEK_SET);
-        fread(&latime,sizeof(unsigned int),1,fin);
-        fread(&inaltime,sizeof(unsigned int),1,fin);
+        fseek(fin, 18, SEEK_SET);
+        fread(&width, sizeof(unsigned int), 1, fin);
+        fread(&height, sizeof(unsigned int), 1, fin);
         rewind(fin);
 
-        fscanf(key,"%u",&cheie);
-        fscanf(key,"%u",&SV);
+        fscanf(key, "%u", &KEY);
+        fscanf(key, "%u", &SV);
         fclose(key);
 
 
         union sv form;
-        form.x=SV;
+        form.x = SV;
         union xor rnd;
 
-        unsigned int *R=(unsigned int *)malloc((2*inaltime*latime)*sizeof(unsigned int));
-        R[0]=cheie;
+        unsigned int *R = (unsigned int *)malloc((2*height*width)*sizeof(unsigned int));
+        R[0] = KEY;
 
-        for(int i=1; i<=2*latime*inaltime-1; i++)
-            R[i]=xorshift32(R[i-1]);
+        for(int i=1; i<=2*width*height-1; i++)
+            R[i] = xorshift32(R[i-1]);
 
-        unsigned int *perm=permutare(latime,inaltime,R);
-            pixel *L=liniarizare(nume_fin);
-            pixel *P=(pixel*)malloc(latime*inaltime*sizeof(pixel));
+        unsigned int *perm = permute(width, height, R);
+            pixel *L = linearization(bmp_in);
+            pixel *P = (pixel*)malloc(width*height*sizeof(pixel));
 
-            for(int x=0;x<inaltime*latime;x++){
+            for(int x=0;x<height*width;x++){
                 P[perm[x]].B=L[x].B;
                 P[perm[x]].G=L[x].G;
                 P[perm[x]].R=L[x].R;
-                        }
+            }
 
+        pixel* C=(pixel*)malloc(width*height*sizeof(pixel));
 
-        pixel* C=(pixel*)malloc(latime*inaltime*sizeof(pixel));
+        for (int k=0; k<height*width; k++){
 
-        for (int k=0;k<inaltime*latime;k++){
-
-                rnd.y=R[inaltime*latime+k];
+                rnd.y=R[height*width+k];
 
                 if(k==0){
 
@@ -191,26 +189,26 @@ void cripteaza(char* nume_fin,char *nume_cheie,char*nume_fout){
 
         }
 
-                export_lin(nume_fin,nume_fout,C);
+                export_linear(bmp_in, bmp_out, C);
                 fclose(fin);
 
 }
-void decripteaza(char *nume_fin,char* nume_img_enc,char*nume_fout,char *nume_cheie){
+void decrypt(char *bmp_in, char* bmp_out, char *txt_key){
 
         FILE *key,*fin;
-        key=fopen(nume_cheie,"r");
-        fin=fopen(nume_fin,"rb");
+        key=fopen(txt_key,"r");
+        fin=fopen(bmp_in,"rb");
         if(key==NULL || fin==NULL)
         {
-            printf("eroare(decripteaza)");
+            printf("error(decrypt)");
             exit(0);
         }
 
-        unsigned int inaltime,latime,cheie,SV;
+        unsigned int width, height, cheie, SV;
                 rewind(fin);
                 fseek(fin,18,SEEK_SET);
-                fread(&latime,sizeof(unsigned int),1,fin);
-                fread(&inaltime,sizeof(unsigned int),1,fin);
+                fread(&width,sizeof(unsigned int),1,fin);
+                fread(&height,sizeof(unsigned int),1,fin);
                 fscanf(key,"%u",&cheie);
                 fscanf(key,"%u",&SV);
                 fclose(key);
@@ -219,28 +217,28 @@ void decripteaza(char *nume_fin,char* nume_img_enc,char*nume_fout,char *nume_che
                 form.x=SV;
                 union xor rnd;
 
-                unsigned int *R=(unsigned int *)malloc((2*inaltime*latime)*sizeof(unsigned int));
+                unsigned int *R=(unsigned int *)malloc((2*height*width)*sizeof(unsigned int));
                 R[0]=cheie;
 
-                for(int i=1;i<=2*latime*inaltime-1;i++)
+                for(int i=1;i<=2*width*height-1;i++)
                     R[i]=xorshift32(R[i-1]);
 
-            unsigned int *perm=permutare(latime,inaltime,R);
+            unsigned int *perm=permute(width,height,R);
 
-            int *inv_perm=(int*)malloc(latime*inaltime*sizeof(int));
+            int *inv_perm=(int*)malloc(width*height*sizeof(int));
 
-            pixel *L=liniarizare(nume_img_enc);
+            pixel *L=linearization(bmp_in);
 
-            for(int i=0; i<latime*inaltime; i++){
+            for(int i=0; i<width*height; i++){
 
                 inv_perm[perm[i]]=i;
             }
 
-            pixel *C=(pixel*)malloc(inaltime*latime*sizeof(pixel));
+            pixel *C=(pixel*)malloc(height*width*sizeof(pixel));
 
-            for (int k=0;k<inaltime*latime;k++){
+            for (int k=0;k<height*width;k++){
 
-                    rnd.y=R[inaltime*latime+k];
+                    rnd.y=R[height*width+k];
 
                    if(k==0){
 
@@ -257,10 +255,10 @@ void decripteaza(char *nume_fin,char* nume_img_enc,char*nume_fout,char *nume_che
                     }
 
             }
-            pixel *D=(pixel*)malloc(latime*inaltime*sizeof(pixel));
+            pixel *D=(pixel*)malloc(width*height*sizeof(pixel));
 
 
-            for(int x=0;x<inaltime*latime;x++){
+            for(int x=0;x<height*width;x++){
 
                     D[inv_perm[x]].B=C[x].B;
                     D[inv_perm[x]].G=C[x].G;
@@ -268,10 +266,9 @@ void decripteaza(char *nume_fin,char* nume_img_enc,char*nume_fout,char *nume_che
             }
 
 
-            export_lin(nume_fin,nume_fout,D);
+            export_linear(bmp_in, bmp_out, D);
 
-
-    }
+}
 void test_chi(char *nume_imagine){
 
     FILE *f;
@@ -288,7 +285,7 @@ void test_chi(char *nume_imagine){
     fread(&inaltime,sizeof(unsigned int),1,f);
     fclose(f);
 
-    pixel*px=liniarizare(nume_imagine);
+    pixel*px=linearization(nume_imagine);
 
     unsigned int*fvR,*fvG,*fvB;
     fvR=(unsigned int*)calloc(256,sizeof(unsigned int));
@@ -320,10 +317,13 @@ void test_chi(char *nume_imagine){
     }
 int main()
 {
-    
-    //cripteaza("LAND2.BMP","key.txt","encrypted.bmp");
+    char* bmp_in = "LAND2.BMP";
+    char* bmp_out = "ENCR_TEST.bmp";
+    char* key = "key.txt";
 
-    decripteaza("encrypted.bmp", "encrypted.bmp", "decrypted.bmp", "key.txt");
+    //encrypt(bmp_in, key, bmp_out);
+    decrypt(bmp_out, "decrypted.bmp", key);
+
     	
 
     return 0;
